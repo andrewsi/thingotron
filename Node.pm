@@ -20,8 +20,11 @@ sub new {
 		nodes		=> {}, 
 	};
 
-	while (my $nodeName = shift) {
-		$self->{nodes}->{$nodeName} = undef;
+	if (scalar(@_)) {
+		my $nodeNames = shift;
+		foreach my $thisNodeName(@$nodeNames) {
+			$self->{nodes}->{$thisNodeName} = undef;
+		}
 	}
 
 	bless $self, $class;

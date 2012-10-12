@@ -24,7 +24,7 @@ sub new {
 	# I'm going to create the queue as a linked list. When we get new entries to add, they will need adding at the end 
 	# of the list
 	##
-	
+
 	my $class = shift;
 
 	my $self = LinkedList->new();

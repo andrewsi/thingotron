@@ -14,7 +14,7 @@ package LinkedList;
 # Better delete list - step through the list, get next node, undef this one?
 #
 
-use LinkedListNode;
+use Node;
 use strict;
 
 sub new {
@@ -31,8 +31,10 @@ sub new {
 	my $class = shift;
 
 	my $self = {
-		root => undef,
+		rootNode => undef,
+		lastNode => undef,
 		length => 0, 
+		nodeNames => ["previous", "next"], 
 	};
 
 	bless $self, $class;
@@ -63,12 +65,12 @@ sub iterate {
 	##
 	my ($self) = @_;
 
-	my $thisNode = $self->{root};
+	my $thisNode = $self->{rootNode};
 
 	if (defined($thisNode)) { 
 		while (defined($thisNode)) {
 			print $thisNode->getContents() . "\n";
-			$thisNode = $thisNode->getNextNode();
+			$thisNode = $thisNode->getNode("next");
 		}
 	}
 }
@@ -79,12 +81,12 @@ sub iterateBackwards {
 	##
 	my ($self) = @_;
 
-	my $thisNode = $self->moveToNode();
+	my $thisNode = $self->{lastNode};
 
 	if (defined($thisNode)) {
 		while (defined($thisNode)) {
 			print $thisNode->getContents() . "\n";
-			$thisNode = $thisNode->getPreviousNode();
+			$thisNode = $thisNode->getNode("previous");
 		}
 	}
 }
@@ -115,12 +117,12 @@ sub moveToNode {
 	}
 
 	## Start out with the first node
-	my $thisNode = $self->{root};
+	my $thisNode = $self->{rootNode};
 	while ((defined($thisNode)) && ($nodeIndex > 0)) {
 		## While we have more nodes to examine, and nodeIndex is above 0, move $thisNode to the next node in the list
 		# and decrement $nodeIdex
 
-		$thisNode = $thisNode->getNextNode();
+		$thisNode = $thisNode->getNode("next");
 		$nodeIndex--;
 	}
 
@@ -149,7 +151,7 @@ sub addNodes {
 
 	foreach my $item (@$data) {
 		## Firstly, create the new node
-		my $newNode = LinkedListNode->new($item);
+		my $newNode = Node->new($item, $self->{nodeNames});
 
 		## Now, we need to add it to the list.
 		# If it's not the first node, then we need to update the pointers for the neighbouring nodes:
@@ -159,28 +161,33 @@ sub addNodes {
 		if (defined($lastNode)) {
 			## This isn't the first node, so we need to update pointers
 
-			if (defined($lastNode->getNextNode())) {
-				## The previous node has a nextNode set. In that case, we're inserting this between two 
-				# existing nodes. So we need to point their Next and Previous pointers to point at the 
-				# new node
+			my $nextNode = $lastNode->getNode("next");
+
+			if (defined($nextNode)) {
+				##
+				# There's a node after this one.
+				# Point the new node's next pointer to it; and its previous pointer at the new node.
 				##
 
-				$lastNode->getNextNode->setPreviousNode($newNode);
-				$newNode->setNextNode($lastNode->getNextNode());
+				$nextNode->setNode("previous", $newNode);
+				$newNode->setNode("next", $nextNode);
+			} else {
+				$self->{lastNode} = $newNode;
 			}
 
 			##
-			# Finally, set the pointers on this node to the right place
+			# Point the previous node's next pointer to the new node; and the new node's previous pointer to the last node
 			##
 
-			$lastNode->setNextNode($newNode);
-			$newNode->setPreviousNode($lastNode);
+			$lastNode->setNode("next", $newNode);
+			$newNode->setNode("previous", $lastNode);
 		} else {
 			##
 			# This is the first node in the list
 			# So update $self to point to this node as root
 			## 
-			$self->{root} = $newNode;
+			$self->{rootNode} = $newNode;
+			$self->{lastNode} = $newNode;
 		}
 
 		$lastNode = $newNode;
@@ -192,6 +199,30 @@ sub addNodes {
 	##
 
 	$self->{length} += $nodeCount;
+}
+
+sub addNodeToStart {
+	##
+	# This is a special case; I'll add this in to addNodes as soon as I figure out how
+	# This explicitly adds a node at the start of the list.
+	##
+	
+	my $self = shift;
+	my $data = shift;
+
+	my $newNode = Node->new($data);
+
+	if ($self->{length} == 0) {
+		$self->{rootNode} = $newNode;
+		$self->{lastNode} = $newNode;
+	} else {
+		$newNode->setNode("next", $self->{rootNode});
+		$self->{rootNode}->setNode("previous", $newNode);
+
+		$self->{rootNode} = $newNode;
+	}
+
+	$self->{length}++;
 }
 
 sub deleteOneNode {
@@ -207,22 +238,25 @@ sub deleteOneNode {
 	# If they're set, then redirect them to the right place
 	##
 
-	my $prev = $node->getPreviousNode();
-	my $next = $node->getNextNode();
+	my $prev = $node->getNode("previous");
+	my $next = $node->getNode("next");
 
 	if (defined($prev)) {
-		$prev->setNextNode($next);
+		$prev->setNode("next", $next);
 	}
 	if (defined($next)) {
-		$next->setPreviousNode($prev);
+		$next->setNode("previous", $prev);
 	}
 
 	##
 	# If this is the root node, then point it at what was the second node
 	##
 
-	if ($node == $self->{root}) {
-		$self->{root} = $next; 
+	if ($node == $self->{rootNode}) {
+		$self->{rootNode} = $next; 
+	}
+	if ($node == $self->{lastNode}) {
+		$self->{lastNode} = $prev;
 	}
 
 	##
@@ -233,7 +267,6 @@ sub deleteOneNode {
 
 	##
 	# Finally, return the contents of the deleted node.
-	# There's no need for this function to return anything, but it might as well pass the value back
 	##
 	
 	my $contents = $node->getContents();
@@ -255,7 +288,7 @@ sub deleteList {
 	my $self = shift;
 
 	while ($self->{length} > 0) {
-		$self->deleteOneNode($self->{root});
+		$self->deleteOneNode($self->{rootNode});
 	}
 }
 
@@ -268,10 +301,10 @@ sub findNode {
 	my $self = shift;
 	my $value = shift;
 
-	my $checkNode = $self->{root};
+	my $checkNode = $self->{rootNode};
 
 	while ((defined($checkNode)) && ($value ne $checkNode->getContents())) {
-		$checkNode = $checkNode->getNextNode();
+		$checkNode = $checkNode->getNode("next");
 	}
 
 	return $checkNode; 

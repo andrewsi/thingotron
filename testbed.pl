@@ -1,14 +1,17 @@
 #!perl;
 
 use strict;
-use LinkedList;
+use LoadConfig;
+use Twitter;
 
-my @data = (1, 2, 3, 4, 5, 6);
+my $config = new LoadConfig("C:\\Perl\\programs\\thingotron\\twitter.config");
 
-my $list = new LinkedList(\@data);
+my $twitter = new Twitter($config);
 
-my $node = $list->findNode(7);
+my $values = $twitter->getUserDetails($config->{"user"});
 
-print $node->getContents();
+foreach my $entry (keys(%{$values})) {
+	print $entry . "\t" . $values->{$entry} . "\n";
+}
 
 exit;

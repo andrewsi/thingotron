@@ -38,7 +38,7 @@ sub new {
 	$self->{"accessToken"} = $config->{"accessToken"};
 	$self->{"accessTokenSecret"} = $config->{"accessTokenSecret"};
 
-	$self->{"rootURL"} = "http://api.twitter.com/1/";
+	$self->{"rootURL"} = "https://api.twitter.com/1.1/";
 
 	bless $self, $class;
 
@@ -64,14 +64,13 @@ sub tweet {
 
 	my %parameters = ();
 
-	$parameters{"status"} = $status;
-	$parameters{"include_entities"} = "true";
 	$parameters{"oauth_consumer_key"} = $self->{"consumerKey"};
 	$parameters{"oauth_nonce"} = time();
-#	$parameters{"oauth_nonce"} = "kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg";
+	$parameters{"oauth_signature_method"} = "HMAC-SHA1";
 	$parameters{"oauth_timestamp"} = time();
 	$parameters{"oauth_token"} = $self->{"accessToken"};
-	$parameters{"oauth_version"} = "1.0";
+	$parameters{"oauth_version"} = "1.0"; 
+	$parameters{"status"} = $status;
 
 	my $escapedString = doEncoding(%parameters);
 
@@ -86,9 +85,7 @@ sub tweet {
 	$signingKey = URI::Escape::uri_escape_utf8($self->{"consumerSecret"}) . "&";
 	$signingKey .= URI::Escape::uri_escape_utf8($self->{"accessTokenSecret"});
 
-	$parameters{"oauth_signature"} = hmac_encode ($signingKey, $baseString);
-	
-	$parameters{"oauth_signature_method"} = "HMAC-SHA1";
+	$parameters{"oauth_signature"} = URI::Escape::uri_escape_utf8(hmac_encode ($signingKey, $baseString));
 
 	my $authorization = "OAuth ";
 	$authorization .= 'oauth_consumer_key="' . $parameters{"oauth_consumer_key"} . '", ';
@@ -99,11 +96,11 @@ sub tweet {
 	$authorization .= 'oauth_token="' . $parameters{"oauth_token"} . '", ';
 	$authorization .= 'oauth_version="' . $parameters{"oauth_version"} . '"';
 
-	print $authorization;
-
 	my $browser = LWP::UserAgent->new;
 
-	my $response = $browser->post($theURL, ["status" => URI::Escape::uri_escape_utf8($status)],  "Authorization", $authorization);
+	my $response = $browser->post($theURL . "?status=" . URI::Escape::uri_escape_utf8($status),
+		"Authorization" => $authorization, 
+		"Content-type" => "application/x-www-form-urlencoded");
 
 	if ($response->is_success) {
 		print "Success!";

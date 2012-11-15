@@ -18,6 +18,12 @@ package Grid;
 # already there. 
 #
 # We cycle through the list to check - when it runs out, we've run out of basic checks that we can make.
+#
+# Look for singletons - check each (row / column / house) and see if there's a number that appears in just one square. If there is, 
+# we can solve that square.
+#
+# Look for groups - if we have three squares, with possible values of (1,2,3), (1,2), (1,2), then the first square has to have a 
+# value of 3
 ## 
 
 use strict;
@@ -28,7 +34,7 @@ sub new {
 
 	## 
 	# We're going to store a set of Square classes in a 9x9 array, stores as:
-	# $self->{row}->{col}
+	# $self->{row}->{column}
 	# We'll also store:
 	# coords - a list of squares that we need to check
 	# solved - the number of squares that we've solved already
@@ -47,9 +53,9 @@ sub new {
 	##
 
 	for (my $row = 1; $row <= 9; $row++) {
-		for (my $col = 1; $col <= 9; $col++) {
-			$self->{$row}->{$col} = new Square();
-			$self->addToCheckList($row, $col);
+		for (my $column = 1; $column <= 9; $column++) {
+			$self->{$row}->{$column} = new Square();
+			$self->addToCheckList($row, $column);
 		}
 	}
 
@@ -134,19 +140,19 @@ sub printGrid {
 
 	print "+---+---+---+\n";
 
-	for (my $rows = 1; $rows <= 9; $rows++) {
+	for (my $row = 1; $row <= 9; $row++) {
 		print "|";
 
-		for (my $cols = 1; $cols <= 9; $cols++) {
+		for (my $column = 1; $column <= 9; $column++) {
 			## Check to see if this square is solved; if it is, print out the value of this square
 
-			if (my $value = $self->{$rows}->{$cols}->isSolved()) {
+			if (my $value = $self->{$row}->{$column}->isSolved()) {
 				print $value;
 			} else {
 				print " ";
 			}
 
-			if ($cols % 3 == 0) {
+			if ($column % 3 == 0) {
 				print "|";
 			}
 
@@ -154,7 +160,7 @@ sub printGrid {
 
 		print "\n";
 
-		if ($rows % 3 == 0) {
+		if ($row % 3 == 0) {
 			print "+---+---+---+\n";
 		}
 	}
@@ -181,13 +187,13 @@ sub removeValueFromRow {
 
 	my ($self, $rowToClear, $thisColumn, $value) = @_;
 
-	for (my $col = 1; $col <=9; $col++) {
-		if ($col == $thisColumn) {
+	for (my $column = 1; $column <=9; $column++) {
+		if ($column == $thisColumn) {
 			next;
 		}
 
-		if ($self->{$rowToClear}->{$col}->removeFromList($value)) {
-			$self->addToCheckList($rowToClear, $col);
+		if ($self->{$rowToClear}->{$column}->removeFromList($value)) {
+			$self->addToCheckList($rowToClear, $column);
 		}
 
 	}
@@ -224,13 +230,13 @@ sub removeValueFromHouse {
 	my @house = getHouseCoords($thisRow, $thisColumn);
 
 	for (my $row = $house[0] * 3 + 1; $row <= $house[0] * 3 + 3; $row++) {
-		for (my $col = $house[1] * 3 + 1; $col <= $house[1] * 3 + 3; $col++) {
-			if ($row == $thisRow && $col == $thisColumn) {
+		for (my $column = $house[1] * 3 + 1; $column <= $house[1] * 3 + 3; $column++) {
+			if ($row == $thisRow && $column == $thisColumn) {
 				next;
 			}
 
-			if ($self->{$row}->{$col}->removeFromList($value)) {
-				$self->addToCheckList($row, $col);
+			if ($self->{$row}->{$column}->removeFromList($value)) {
+				$self->addToCheckList($row, $column);
 			}
 		}
 	}
@@ -240,9 +246,9 @@ sub getHouseCoords {
 	##
 	# Work out where this house sits in the grid.
 	##
-	my ($row, $col) = @_;
+	my ($row, $column) = @_;
 
-	return (int(($row - 1) / 3), int(($col - 1) / 3));
+	return (int(($row - 1) / 3), int(($column - 1) / 3));
 }
 
 sub addToCheckList {
@@ -251,10 +257,10 @@ sub addToCheckList {
 	# If it's not, put it on the end to be re-checked
 	##
 
-	my ($self, $row, $col) = @_;
+	my ($self, $row, $column) = @_;
 
-	if (! in_array ($self->{"coords"}, $row . "_" . $col)) {
-		push (@{$self->{"coords"}}, $row . "_" . $col);
+	if (! in_array ($self->{"coords"}, $row . "_" . $column)) {
+		push (@{$self->{"coords"}}, $row . "_" . $column);
 	}
 }
 
@@ -269,30 +275,333 @@ sub in_array {
 	return (exists($items{$search}));
 }
 
+sub lookForSingletons {
+	## 
+	# We're looking for squares in a row, column, or house that are the only one in that set with that value
+	# I've broken this down into two functions
+	# This one steps through each possible set, and adds the coordinates of each square to an array; the second takes the 
+	# array, and processes it - the latter doesn't need to know whether this is a row, column, or house
+	#
+	# I imagine I could generate all these in one single loop, but it would be somewhat messy; this is inefficient, but much 
+	# easier to understand
+	##
+
+	my $self = shift;
+
+	my $hits = 0;
+
+	## Firstly, check the rows
+
+	for (my $row = 1; $row <= 9; $row++) {
+		my @squares = ();
+
+		for (my $column = 1; $column <= 9; $column++) {
+			if (! $self->{$row}->{$column}->isSolved()) {
+				push (@squares, $row . "_" . $column);
+			}
+		}
+
+		$hits += $self->do_lookForSingletons(@squares);
+	}
+
+	## Now, check the columns
+
+	for (my $column = 1; $column <= 9; $column++) {
+		my @squares = ();
+
+		for (my $row = 1; $row <= 9; $row++) {
+			if (! $self->{$row}->{$column}->isSolved()) {
+				push (@squares, $row . "_" . $column);
+			}
+		}
+
+		$hits += $self->do_lookForSingletons(@squares);
+	}
+
+	## And finally, the houses
+
+	for (my $houseRow = 0; $houseRow <= 2; $houseRow++) {
+		for (my $houseColumn = 0; $houseColumn <= 2; $houseColumn++) {
+			my @squares = ();
+
+			for (my $row = $houseRow * 3 + 1; $row <= $houseRow * 3 + 3; $row++) {
+				for (my $column = $houseColumn * 3 + 1; $column <= $houseColumn * 3 + 3; $column++) {
+					if (! $self->{$row}->{$column}->isSolved()) {
+						push (@squares, $row . "_" . $column);
+					}
+				}
+			}
+
+			$hits += $self->do_lookForSingletons(@squares);
+		}
+	}
+
+	## Return the number of solves we've made
+
+	return $hits;
+}
+
+sub do_lookForSingletons {
+	##
+	# This code goes through an array of squares, and checks to see if there are any that are the only one with a given number
+	# If so, solve that square
+	##
+
+	my $self = shift;
+	my @coords = @_;
+
+	my $hits = 0;
+
+	my %required = ();
+
+	## 
+	# First of all, go through all the squares
+	# Generate a hash as we go of all 
+
+	foreach my $square (@coords) {
+		my ($row, $column) = split (/_/, $square);
+
+		my @numbers = $self->{$row}->{$column}->getValues();
+
+		foreach my $number (@numbers) {
+			if (exists($required{$number})) {
+				$required{$number}++;
+			} else {
+				$required{$number} = 1;
+			}
+		}
+	}
+
+	foreach my $number (keys(%required)) {
+		if ($required{$number} == 1) {
+			$hits++;
+
+			foreach my $square(@coords) {
+				my ($row, $column) = split (/_/, $square);
+
+				if ($self->{$row}->{$column}->isPossibleValue($number)) {
+					$self->{$row}->{$column}->setValue($number);
+					$self->removeValue($row, $column, $number);
+					$self->{"solved"}++;
+					print "Assigning $number to $row,$column\n";
+					last;
+				}
+			}
+		}
+	}
+
+	return $hits;
+}
+
+sub basicCheck {
+	my $self = shift;
+
+	while (my $square = shift (@{$self->{"coords"}})) {
+		my ($row, $column) = split (/_/, $square);
+
+		if (my $value = $self->{$row}->{$column}->isSolved()) {
+			$self->{"solved"}++;
+			$self->removeValue ($row, $column, $value);
+		}
+	}
+}
+
+sub lookForGroups {
+	my $self = shift;
+
+	my $hits = 0;
+
+	for (my $row = 1; $row <= 9; $row++) {
+		my @squares = ();
+
+		for (my $column = 1; $column <= 9; $column++) {
+			if (! $self->{$row}->{$column}->isSolved()) {
+				push (@squares, $row . "_" . $column);
+			}
+		}
+
+		$hits += $self->do_lookForGroups(@squares);
+	}
+
+	for (my $column = 1; $column <= 9; $column++) {
+		my @squares = ();
+
+		for (my $row = 1; $row <= 9; $row++) {
+			if (! $self->{$row}->{$column}->isSolved()) {
+				push (@squares, $row . "_" . $column);
+			}
+		}
+
+		$hits += $self->do_lookForGroups(@squares);
+	}
+
+	for (my $houseRow = 0; $houseRow <= 2; $houseRow++) {
+		for (my $houseColumn = 0; $houseColumn <= 2; $houseColumn++) {
+			my @squares = ();
+
+			for (my $row = $houseRow * 3 + 1; $row <= $houseRow * 3 + 3; $row++) {
+				for (my $column = $houseColumn * 3 + 1; $column <= $houseColumn * 3 + 3; $column++) {
+					push (@squares, $row . "_" . $column);
+				}
+			}
+
+			$hits += $self->do_lookForGroups(@squares);
+		}
+	}
+
+	return $hits;
+}
+
+sub do_lookForGroups {
+	my $self = shift;
+	my @coords = @_;
+
+	my $hits = 0;
+
+	for (my $i = 0; $i < scalar(@coords); $i++) {
+		my ($targetRow, $targetColumn) = split (/_/, $coords[$i]);
+
+		my @targetKeys = $self->{$targetRow}->{$targetColumn}->getValues();
+
+		my %required = map {$_ => 1} @targetKeys;
+
+		my $success = 1;
+
+		for (my $j = 0; $j < scalar(@coords); $j++) {
+			if ($i == $j) {
+				next;
+			}
+
+			my ($row, $column) = split(/_/, $coords[$j]);
+
+			my @keys = $self->{$row}->{$column}->getValues();
+
+			foreach my $key(@keys) {
+				if (! exists($required{$key})) {
+					$success = 0;
+					last;
+				} else {
+					$required{$key}++;
+				}
+			}
+
+			if ($success == 0) {
+				last;
+			}
+		}
+
+		if ($success) {
+			## 
+			# This means that we've got a square; and other squares in this set contain just a subset of this square's 
+			# possible answers
+			# Now we need to check - does %required have one key with a value of 1, and all the others equal?
+
+			if ($coords[0] eq "1_1") {
+				print "Maybe group\n";
+			}
+
+			my $pass = 1;
+			my $check = 0;
+
+			my $keyCount = -1; 
+
+			foreach my $key (keys(%required)) {
+				if ($required{$key} == 1) {
+					if ($check == 0) {
+						$check = $key;
+					} else {
+						$pass = 0;
+						last;
+					}
+				} else {
+					if ($keyCount == -1) {
+						$keyCount = $required{$key};
+					} else {
+						if ($keyCount != $required{$key}) {
+							$pass = 0;
+							last;
+						}
+					}
+				}
+			}
+
+			if (($pass == 1) && ($check > 0)) {
+				print "We have a group\n";
+
+				print join ("\t", @coords) . "\n";
+				print $check . "\n";
+				exit;
+			}
+		}
+	}
+
+	return $hits;
+}
+
 sub solve {
 	## Do the work of solving the puzzle
 
 	my $self = shift;
 
-	while (my $square = shift (@{$self->{"coords"}})) {
-		my ($row, $col) = split (/_/, $square);
+	$self->basicCheck();
 
-		if (my $value = $self->{$row}->{$col}->isSolved()) {
-			$self->{"solved"}++;
-			$self->removeValue ($row, $col, $value);
+	while ($self->{"solved"} < 81) {
+		my $lastSolved = $self->{"solved"};
+
+		if ($self->lookForSingletons()) {
+			$self->basicCheck();
 		}
+
+		#if ($self->lookForGroups()) {
+		#$self->basicCheck();
+		#}
+
+		if ($lastSolved == $self->{"solved"}) {
+			print "Unsolvable\n";
+			last;
+		}
+		$lastSolved = $self->{"solved"};
 	}
-
-	print $self->{"solved"} . "\n";
-
-	## There are extra checks that I can add here:
-	# - look for singletons
-	# 	if there is only one place where a given number can fit, we can solve it.
-	#
-	# - look for groups
-	# 	if there are three squares, and their possible values are (1,2), (1,2) and (1,2,3) then the third square 
-	# 	has to be 3
-	##
 }
 
 1;
+
+##
+# Groups
+#
+# I think we need to:
+# - use this square to generate a list of numbers we're looking for
+# - for each other square in the list, do:
+# 	- does this square have any numbers not in my hash? If so, fail
+# 	- otherwise, increment all values found in this square's values by 1
+# At the end see if:
+# 	- this square's hash has one number with a value of 0; and
+# 	- all the other numbers are equal
+#
+# So. (1,2,3), (1,2), (1,2)
+#
+# Hash:
+#
+# 1 = 0
+# 2 = 0
+# 3 = 0
+#
+# At the end of the run, we'll have:
+# 1 = 2
+# 2 = 2
+# 3 = 0		<-- winner
+#
+# So. (1,2,3,4), (1,2), (2,3), (1,3)
+#
+# Hash:
+#
+# 1 = 0
+# 2 = 0
+# 3 = 0
+# 4 = 0
+#
+# At the end of the run, we'll have:
+# 1 = 2
+# 2 = 2
+# 3 = 2
+# 4 = 0		<-- winner

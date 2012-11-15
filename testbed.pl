@@ -1,13 +1,12 @@
-#!perl;
+#!perl
 
 use strict;
-use LoadConfig;
-use Twitter;
+use Grid;
 
-my $config = new LoadConfig("C:\\Perl\\programs\\thingotron\\twitter.config");
-
-my $twitter = new Twitter($config);
-
-$twitter->tweet("Hello, world");
+my $puzzle = new Grid();
+$puzzle->loadFile("data\\in.txt");
+$puzzle->printGrid();
+$puzzle->solve();
+$puzzle->printGrid();
 
 exit;

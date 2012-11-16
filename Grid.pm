@@ -193,6 +193,7 @@ sub removeValueFromRow {
 
 		if ($self->{$rowToClear}->{$column}->removeFromList($value)) {
 			if (my $solution = $self->{$rowToClear}->{$column}->isSolved()) {
+				$self->removeValue($rowToClear, $column, $solution);
 				$self->{"solved"}->{$rowToClear . "_" . $column} = 1;
 			} else {
 				$self->addToCheckList($rowToClear, $column);
@@ -217,6 +218,7 @@ sub removeValueFromColumn {
 
 		if ($self->{$row}->{$columnToClear}->removeFromList($value)) {
 			if (my $solution = $self->{$row}->{$columnToClear}->isSolved()) {
+				$self->removeValue($row, $columnToClear, $solution);
 				$self->{"solved"}->{$row . "_" . $columnToClear} = 1;
 			} else {
 				$self->addToCheckList($row, $columnToClear);
@@ -245,6 +247,7 @@ sub removeValueFromHouse {
 
 			if ($self->{$row}->{$column}->removeFromList($value)) {
 				if (my $solution = $self->{$row}->{$column}->isSolved()) {
+					$self->removeValue($row, $column, $solution);
 					$self->{"solved"}->{$row . "_" . $column} = 1;
 				} else {
 					$self->addToCheckList($row, $column);
@@ -554,16 +557,16 @@ sub solve {
 
 	$self->basicCheck();
 
-	while ((scalar(keys(%{$self->{"solved"}})) < 81) && 0) {
+	while (scalar(keys(%{$self->{"solved"}})) < 81) {
 		my $lastSolved = scalar(keys(%{$self->{"solved"}}));
 
-#		if ($self->lookForSingletons()) {
-#			$self->basicCheck();
-#		}
+		if ($self->lookForSingletons()) {
+			$self->basicCheck();
+		}
 
-#		if ($self->lookForGroups()) {
-#			$self->basicCheck();
-#		}
+		if ($self->lookForGroups()) {
+			$self->basicCheck();
+		}
 
 		if ($lastSolved == scalar(keys(%{$self->{"solved"}}))) {
 			print "Unsolvable\n";
@@ -571,25 +574,8 @@ sub solve {
 		}
 		$lastSolved = scalar(keys(%{$self->{"solved"}}));
 	}
+
+	print scalar(keys(%{$self->{"solved"}})) . "\n";
 }
 
 1;
-
-##
-# This isn't working properly. And is going to get a good re-write, I think.
-#
-# It's supposed to generate a list of squares that need checking - these are squares where we've removed at least one candidate number from 
-# the list. But something isn't working right.
-#
-# What should happen is, we check each square. If it has just one possible value left, it's solved; so we can remove its value from all other 
-# squares within its reach. All those squares go on the list of squares to be re-checked. When this list runs out, we're done with basic checking.
-#
-# This seems to work properly.
-#
-# The issue is with the code looking for singletons. 
-#
-# It's supposed to generate a set of squares from one column, row or house. It pulls just ones that have yet to be solved. Then it parses that set, 
-# looking for candidates that exist in just one square. What seems to have happened, though, is that an earlier solved square isn't going through
-# the removal process. So the solved square isn't showing up in the set, but its number is, and is appearing in one of the set of squares, which is
-# then kicking off the removal process and taking it out of the solved square.
-##

@@ -45,7 +45,7 @@ sub new {
 	bless $self, $class;
 
 	$self->{"coords"} = [];
-	$self->{"solved"} = 0;
+	$self->{"solved"} = {};
 
 	##
 	# Start out by creating an empty grid, with no numbers set
@@ -55,7 +55,6 @@ sub new {
 	for (my $row = 1; $row <= 9; $row++) {
 		for (my $column = 1; $column <= 9; $column++) {
 			$self->{$row}->{$column} = new Square();
-			$self->addToCheckList($row, $column);
 		}
 	}
 
@@ -111,7 +110,7 @@ sub loadFile {
 
 			if ($values[$i] >= 1 && $values[$i] <= 9) {
 				$self->{$lineCount}->{$i + 1}->setValue($values[$i]);
-				$self->removeValue ($lineCount, $i + 1, $values[$i]);
+				$self->addToCheckList($lineCount, $i + 1);
 			}
 		}
 
@@ -193,7 +192,11 @@ sub removeValueFromRow {
 		}
 
 		if ($self->{$rowToClear}->{$column}->removeFromList($value)) {
-			$self->addToCheckList($rowToClear, $column);
+			if (my $solution = $self->{$rowToClear}->{$column}->isSolved()) {
+				$self->{"solved"}->{$rowToClear . "_" . $column} = 1;
+			} else {
+				$self->addToCheckList($rowToClear, $column);
+			}
 		}
 
 	}
@@ -204,6 +207,7 @@ sub removeValueFromColumn {
 	# Remove a value from all the other squares in a column where it's still a possibility
 	# If any are removed, make sure that those squares are re-checked
 	##
+	
 	my ($self, $thisRow, $columnToClear, $value) = @_;
 
 	for (my $row = 1; $row <= 9; $row++) {
@@ -212,7 +216,11 @@ sub removeValueFromColumn {
 		}
 
 		if ($self->{$row}->{$columnToClear}->removeFromList($value)) {
-			$self->addToCheckList($row, $columnToClear);
+			if (my $solution = $self->{$row}->{$columnToClear}->isSolved()) {
+				$self->{"solved"}->{$row . "_" . $columnToClear} = 1;
+			} else {
+				$self->addToCheckList($row, $columnToClear);
+			}
 		}
 	}
 }
@@ -236,7 +244,11 @@ sub removeValueFromHouse {
 			}
 
 			if ($self->{$row}->{$column}->removeFromList($value)) {
-				$self->addToCheckList($row, $column);
+				if (my $solution = $self->{$row}->{$column}->isSolved()) {
+					$self->{"solved"}->{$row . "_" . $column} = 1;
+				} else {
+					$self->addToCheckList($row, $column);
+				}
 			}
 		}
 	}
@@ -350,13 +362,12 @@ sub do_lookForSingletons {
 	my $self = shift;
 	my @coords = @_;
 
-	my $hits = 0;
-
 	my %required = ();
 
 	## 
 	# First of all, go through all the squares
-	# Generate a hash as we go of all 
+	# Generate a hash as we go of all the numbers we need for this set of squares, and increment it as we add extra rows.
+	##
 
 	foreach my $square (@coords) {
 		my ($row, $column) = split (/_/, $square);
@@ -374,23 +385,18 @@ sub do_lookForSingletons {
 
 	foreach my $number (keys(%required)) {
 		if ($required{$number} == 1) {
-			$hits++;
-
 			foreach my $square(@coords) {
 				my ($row, $column) = split (/_/, $square);
 
 				if ($self->{$row}->{$column}->isPossibleValue($number)) {
 					$self->{$row}->{$column}->setValue($number);
 					$self->removeValue($row, $column, $number);
-					$self->{"solved"}++;
-					print "Assigning $number to $row,$column\n";
+					$self->{"solved"}->{$row . "_" . $column} = 1;
 					last;
 				}
 			}
 		}
 	}
-
-	return $hits;
 }
 
 sub basicCheck {
@@ -399,8 +405,13 @@ sub basicCheck {
 	while (my $square = shift (@{$self->{"coords"}})) {
 		my ($row, $column) = split (/_/, $square);
 
+		if ($row == 5 && $column == 1) {
+			print "";
+		}
+
 		if (my $value = $self->{$row}->{$column}->isSolved()) {
-			$self->{"solved"}++;
+			print ("$row, $column -> $value\n");
+			$self->{"solved"}->{$row . "_" .$column} = 1;
 			$self->removeValue ($row, $column, $value);
 		}
 	}
@@ -441,7 +452,9 @@ sub lookForGroups {
 
 			for (my $row = $houseRow * 3 + 1; $row <= $houseRow * 3 + 3; $row++) {
 				for (my $column = $houseColumn * 3 + 1; $column <= $houseColumn * 3 + 3; $column++) {
-					push (@squares, $row . "_" . $column);
+					if (! $self->{$row}->{$column}->isSolved()) {
+						push (@squares, $row . "_" . $column);
+					}
 				}
 			}
 
@@ -496,10 +509,6 @@ sub do_lookForGroups {
 			# possible answers
 			# Now we need to check - does %required have one key with a value of 1, and all the others equal?
 
-			if ($coords[0] eq "1_1") {
-				print "Maybe group\n";
-			}
-
 			my $pass = 1;
 			my $check = 0;
 
@@ -545,63 +554,42 @@ sub solve {
 
 	$self->basicCheck();
 
-	while ($self->{"solved"} < 81) {
-		my $lastSolved = $self->{"solved"};
+	while ((scalar(keys(%{$self->{"solved"}})) < 81) && 0) {
+		my $lastSolved = scalar(keys(%{$self->{"solved"}}));
 
-		if ($self->lookForSingletons()) {
-			$self->basicCheck();
-		}
+#		if ($self->lookForSingletons()) {
+#			$self->basicCheck();
+#		}
 
-		#if ($self->lookForGroups()) {
-		#$self->basicCheck();
-		#}
+#		if ($self->lookForGroups()) {
+#			$self->basicCheck();
+#		}
 
-		if ($lastSolved == $self->{"solved"}) {
+		if ($lastSolved == scalar(keys(%{$self->{"solved"}}))) {
 			print "Unsolvable\n";
 			last;
 		}
-		$lastSolved = $self->{"solved"};
+		$lastSolved = scalar(keys(%{$self->{"solved"}}));
 	}
 }
 
 1;
 
 ##
-# Groups
+# This isn't working properly. And is going to get a good re-write, I think.
 #
-# I think we need to:
-# - use this square to generate a list of numbers we're looking for
-# - for each other square in the list, do:
-# 	- does this square have any numbers not in my hash? If so, fail
-# 	- otherwise, increment all values found in this square's values by 1
-# At the end see if:
-# 	- this square's hash has one number with a value of 0; and
-# 	- all the other numbers are equal
+# It's supposed to generate a list of squares that need checking - these are squares where we've removed at least one candidate number from 
+# the list. But something isn't working right.
 #
-# So. (1,2,3), (1,2), (1,2)
+# What should happen is, we check each square. If it has just one possible value left, it's solved; so we can remove its value from all other 
+# squares within its reach. All those squares go on the list of squares to be re-checked. When this list runs out, we're done with basic checking.
 #
-# Hash:
+# This seems to work properly.
 #
-# 1 = 0
-# 2 = 0
-# 3 = 0
+# The issue is with the code looking for singletons. 
 #
-# At the end of the run, we'll have:
-# 1 = 2
-# 2 = 2
-# 3 = 0		<-- winner
-#
-# So. (1,2,3,4), (1,2), (2,3), (1,3)
-#
-# Hash:
-#
-# 1 = 0
-# 2 = 0
-# 3 = 0
-# 4 = 0
-#
-# At the end of the run, we'll have:
-# 1 = 2
-# 2 = 2
-# 3 = 2
-# 4 = 0		<-- winner
+# It's supposed to generate a set of squares from one column, row or house. It pulls just ones that have yet to be solved. Then it parses that set, 
+# looking for candidates that exist in just one square. What seems to have happened, though, is that an earlier solved square isn't going through
+# the removal process. So the solved square isn't showing up in the set, but its number is, and is appearing in one of the set of squares, which is
+# then kicking off the removal process and taking it out of the solved square.
+##

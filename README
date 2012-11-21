@@ -1,0 +1,8 @@
+I've reorganised the files.
+
+This directory is where your code should go; the other directories are:
+
+Core    - modules for internal functionality
+Plugin  - optional modules; these will generally implement an interface with something external
+Utility - related to Core; these are modules that are useful, but don't actually produce results
+configs - where your config files should go

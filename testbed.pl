@@ -1,11 +1,13 @@
 #!perl
 
 use strict;
-use Grid;
+use Utility::CSV;
 
-my $puzzle = new Grid("data\\in3.txt");
-$puzzle->printGrid();
-$puzzle->solve();
-$puzzle->printGrid();
+my $csv = new CSV();
+$csv->filename("./test.csv");
+
+my $lines = $csv->loadfile();
+
+$csv->writefile($lines);
 
 exit;

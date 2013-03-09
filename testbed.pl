@@ -8,6 +8,10 @@ $csv->filename("./test.csv");
 
 my $lines = $csv->loadfile();
 
+if (! $lines) {
+	print $csv->error();
+}
+
 $csv->writefile($lines);
 
 exit;
